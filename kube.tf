@@ -5,6 +5,12 @@ locals {
 
   # Your Hetzner token can be found in your Project > Security > API Token (Read & Write is required).
   hcloud_token = ""
+
+}
+
+variable "my_ip_cidr" {
+  description = "Public IP CIDR for accessing Kube API"
+  type        = string
 }
 
 module "kube-hetzner" {
@@ -92,7 +98,7 @@ module "kube-hetzner" {
   # The service IPv4 address must be part of the service CIDR!
   # cluster_dns_ipv4 = "10.43.0.10"
 
-  # For the control planes, at least three nodes are the minimum for HA. Otherwise, you need to turn off the automatic upgrades (see README).
+  # For the control planes, at least three nodes are the minimum for HA. Otherwise, you need to turn off the automatic upgrades (see README)/
   # **It must always be an ODD number, never even!** Search the internet for "split-brain problem with etcd" or see https://rancher.com/docs/k3s/latest/en/installation/ha-embedded/
   # For instance, one is ok (non-HA), two is not ok, and three is ok (becomes HA). It does not matter if they are in the same nodepool or not! So they can be in different locations and of various types.
 
@@ -168,10 +174,10 @@ module "kube-hetzner" {
 
   agent_nodepools = [
     {
-      name        = "agent-small",
+      name        = "agent-small-int",
       server_type = "cx22",
       location    = "fsn1",
-      labels      = [],
+      labels      = ["node.kubernetes.io/role=worker"],
       taints      = [],
       count       = 2
       # swap_size    = "2G" # remember to add the suffix, examples: 512M, 1G
@@ -184,6 +190,23 @@ module "kube-hetzner" {
       # Enable automatic backups via Hetzner (default: false)
       backups = true
     },
+    # {
+    #   name        = "agent-small-prod",
+    #   server_type = "cx22",
+    #   location    = "fsn1",
+    #   labels      = ["node.kubernetes.io/role=worker, environment=prod"],
+    #   taints      = [],
+    #   count       = 1
+    # swap_size    = "2G" # remember to add the suffix, examples: 512M, 1G
+    # zram_size    = "2G" # remember to add the suffix, examples: 512M, 1G
+    # kubelet_args = ["kube-reserved=cpu=50m,memory=300Mi,ephemeral-storage=1Gi", "system-reserved=cpu=250m,memory=300Mi"]
+
+    # Fine-grained control over placement groups (nodes in the same group are spread over different physical servers, 10 nodes per placement group max):
+    # placement_group = "default"
+
+    # Enable automatic backups via Hetzner (default: false)
+    #   backups = true
+    # },
     # {
     #   name        = "agent-large",
     #   server_type = "cx32",
@@ -221,19 +244,19 @@ module "kube-hetzner" {
     # Egress nodepool useful to route egress traffic using Hetzner Floating IPs (https://docs.hetzner.com/cloud/floating-ips)
     # used with Cilium's Egress Gateway feature https://docs.cilium.io/en/stable/gettingstarted/egress-gateway/
     # See the https://github.com/kube-hetzner/terraform-hcloud-kube-hetzner#examples for an example use case.
-    {
-      name        = "egress",
-      server_type = "cx22",
-      location    = "fsn1",
-      labels = [
-        "node.kubernetes.io/role=egress"
-      ],
-      taints = [
-        "node.kubernetes.io/role=egress:NoSchedule"
-      ],
-      floating_ip = true
-      count       = 1
-    },
+    # {
+    #   name        = "egress",
+    #   server_type = "cx22",
+    #   location    = "fsn1",
+    #   labels = [
+    #     "node.kubernetes.io/role=egress"
+    #   ],
+    #   taints = [
+    #     "node.kubernetes.io/role=egress:NoSchedule"
+    #   ],
+    #   floating_ip = true
+    #   count       = 1
+    # },
     # Arm based nodes
     # {
     #   name        = "agent-arm-small",
@@ -459,7 +482,7 @@ module "kube-hetzner" {
   # See the agent nodepool section for an example of how to do that.
 
   # To disable Hetzner CSI storage, you can set the following to "true", default is "false".
-  # disable_hetzner_csi = true
+  disable_hetzner_csi = true
 
   # If you want to use a specific Hetzner CCM and CSI version, set them below; otherwise, leave them as-is for the latest versions.
   # hetzner_ccm_version = ""
@@ -560,7 +583,7 @@ module "kube-hetzner" {
   # For production use, always use an HA setup with at least 3 control-plane nodes and 2 agents, and keep this on for maximum security.
 
   # The default is "true" (in HA setup i.e. at least 3 control plane nodes & 2 agents, just keep it enabled since it works flawlessly).
-  # automatically_upgrade_k3s = false
+  automatically_upgrade_k3s = false
 
   # By default nodes are drained before k3s upgrade, which will delete and transfer all pods to other nodes.
   # Set this to false to cordon nodes instead, which just prevents scheduling new pods on the node during upgrade
@@ -630,7 +653,11 @@ module "kube-hetzner" {
           username: username
           password: password
   EOT */
-
+  # k3s_registries = <<-EOT
+  #   mirrors:
+  #     docker.io:
+  #     registry.k8s.io:
+  # EOT 
   # Additional environment variables for the host OS on which k3s runs. See for example https://docs.k3s.io/advanced#configuring-an-http-proxy .
   # additional_k3s_environment = {
   #   "CONTAINERD_HTTP_PROXY" : "http://your.proxy:port",
@@ -689,15 +716,17 @@ module "kube-hetzner" {
 
   # Additional flags to pass to the k3s server command (the control plane).
   # k3s_exec_server_args = "--kube-apiserver-arg enable-admission-plugins=PodTolerationRestriction,PodNodeSelector"
-
+  k3s_exec_server_args = "--embedded-registry"
   # Additional flags to pass to the k3s agent command (every agents nodes, including autoscaler nodepools).
   # k3s_exec_agent_args = "--kubelet-arg kube-reserved=cpu=100m,memory=200Mi,ephemeral-storage=1Gi"
+  # k3s_exec_agent_args = "--kubelet-arg --embedded-registry"
 
   # The vars below here passes it to the k3s config.yaml. This way it persist across reboots
   # Make sure you set "feature-gates=NodeSwap=true,CloudDualStackNodeIPs=true" if want to use swap_size
   # see https://github.com/k3s-io/k3s/issues/8811#issuecomment-1856974516
   # k3s_global_kubelet_args = ["kube-reserved=cpu=100m,ephemeral-storage=1Gi", "system-reserved=cpu=memory=200Mi", "image-gc-high-threshold=50", "image-gc-low-threshold=40"]
-  # k3s_control_plane_kubelet_args = []
+  # k3s_global_kubelet_args = ["embedded-registry=true"]
+  #k3s_control_plane_kubelet_args = ["embedded-registry: true"]
   # k3s_agent_kubelet_args = []
   # k3s_autoscaler_kubelet_args = []
 
@@ -711,11 +740,12 @@ module "kube-hetzner" {
   # Please be advised that this setting has no effect on the load balancer when the use_control_plane_lb variable is set to true. This is
   # because firewall rules cannot be applied to load balancers yet.
   # firewall_kube_api_source = null
+  firewall_kube_api_source = [var.my_ip_cidr]
 
   # Allow SSH access from the specified networks. Default: ["0.0.0.0/0", "::/0"]
   # Allowed values: null (disable SSH rule entirely) or a list of allowed networks with CIDR notation.
   # Ideally you would set your IP there. And if it changes after cluster deploy, you can always update this variable and apply again.
-  # firewall_ssh_source = ["1.2.3.4/32"]
+  # firewall_ssh_source = ["46.5.3.205/32"]
 
   # Adding extra firewall rules, like opening a port
   # More info on the format here https://registry.terraform.io/providers/hetznercloud/hcloud/latest/docs/resources/firewall
