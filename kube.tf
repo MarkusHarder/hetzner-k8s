@@ -331,7 +331,7 @@ module "kube-hetzner" {
   ### The following values are entirely optional (and can be removed from this if unused)
 
   # You can refine a base domain name to be use in this form of nodename.base_domain for setting the reserve dns inside Hetzner
-  # base_domain = "mycluster.example.com"
+  base_domain = "markusharder.com"
 
   # Cluster Autoscaler
   # Providing at least one map for the array enables the cluster autoscaler feature, default is disabled
@@ -1139,8 +1139,25 @@ bootstrapPassword: "supermario"
 
 }
 
+resource "hetznerdns_record" "k8s_subdomain" {
+  depends_on = [module.kube-hetzner]
+  zone_id    = data.hetznerdns_zone.main.id
+  name       = "k8s"
+  type       = "A"
+  value      = module.kube-hetzner.ingress_public_ipv4
+  ttl        = 300
+}
+
+data "hetznerdns_zone" "dns_zone" {
+  name = "markusharder.com"
+}
+
 provider "hcloud" {
   token = var.hcloud_token != "" ? var.hcloud_token : local.hcloud_token
+}
+
+provider "hetznerdns" {
+  apitoken = var.hetzner_dns_token
 }
 
 terraform {
@@ -1149,6 +1166,10 @@ terraform {
     hcloud = {
       source  = "hetznercloud/hcloud"
       version = ">= 1.43.0"
+    }
+    hetznerdns = {
+      source  = "timohirt/hetznerdns"
+      version = "2.2.0"
     }
   }
 }
@@ -1161,4 +1182,13 @@ output "kubeconfig" {
 variable "hcloud_token" {
   sensitive = true
   default   = ""
+}
+
+variable "hetzner_dns_token" {
+  sensitive = true
+  default   = ""
+}
+
+data "hetznerdns_zone" "main" {
+  name = "markusharder.com"
 }

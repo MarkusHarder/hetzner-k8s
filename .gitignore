@@ -39,4 +39,4 @@ terraform.rc
 .envrc
 
 *kubeconfig.yaml
-
+*dec*

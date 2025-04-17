@@ -8,13 +8,12 @@ SECRET_NAME="KUBECONFIG"
 KUBECONFIG_PATH=$KUBECONFIG         # Adjust depending on how your Terraform setup outputs it
 
 #  Step 1: Identify public IP
-MY_IP=$(curl -s https://api.ipify.org)
-TF_VAR_my_ip_cidr="${$MY_IP}/32"
+export TF_VAR_my_ip_cidr="$(curl -s https://api.ipify.org)/32"
 
 # Step 1: Run terraform apply (auto-approve for scripting)
 echo "Running terraform apply..."
 terraform init
-terraform apply -var="my_ip_cidr=$MY_IP_CIDR" -auto-approve
+terraform apply -auto-approve
 
 # Step 2: Get kubeconfig path
 # If your terraform module outputs the kubeconfig content, use:
