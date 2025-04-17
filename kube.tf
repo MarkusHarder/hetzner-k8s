@@ -1142,7 +1142,7 @@ bootstrapPassword: "supermario"
 resource "hetznerdns_record" "k8s_subdomain" {
   depends_on = [module.kube-hetzner]
   zone_id    = data.hetznerdns_zone.main.id
-  name       = "k8s"
+  name       = "*.k8s"
   type       = "A"
   value      = module.kube-hetzner.ingress_public_ipv4
   ttl        = 300
