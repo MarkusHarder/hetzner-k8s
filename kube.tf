@@ -749,24 +749,32 @@ module "kube-hetzner" {
 
   # Adding extra firewall rules, like opening a port
   # More info on the format here https://registry.terraform.io/providers/hetznercloud/hcloud/latest/docs/resources/firewall
-  # extra_firewall_rules = [
-  #   {
-  #     description = "For Postgres"
-  #     direction       = "in"
-  #     protocol        = "tcp"
-  #     port            = "5432"
-  #     source_ips      = ["0.0.0.0/0", "::/0"]
-  #     destination_ips = [] # Won't be used for this rule
-  #   },
-  #   {
-  #     description = "To Allow ArgoCD access to resources via SSH"
-  #     direction       = "out"
-  #     protocol        = "tcp"
-  #     port            = "22"
-  #     source_ips      = [] # Won't be used for this rule
-  #     destination_ips = ["0.0.0.0/0", "::/0"]
-  #   }
-  # ]
+  extra_firewall_rules = [
+    {
+      description     = "For Postgres"
+      direction       = "in"
+      protocol        = "tcp"
+      port            = "5432"
+      source_ips      = ["0.0.0.0/0", "::/0"]
+      destination_ips = [] # Won't be used for this rule
+    },
+    {
+      description     = "For Postgres"
+      direction       = "out"
+      protocol        = "tcp"
+      port            = "5432"
+      source_ips      = [] # Won't be used for this rule
+      destination_ips = ["0.0.0.0/0", "::/0"]
+    },
+    #   {
+    #     description = "To Allow ArgoCD access to resources via SSH"
+    #     direction       = "out"
+    #     protocol        = "tcp"
+    #     port            = "22"
+    #     source_ips      = [] # Won't be used for this rule
+    #     destination_ips = ["0.0.0.0/0", "::/0"]
+    #   }
+  ]
 
   # If you want to configure a different CNI for k3s, use this flag
   # possible values: flannel (Default), calico, and cilium
@@ -1138,11 +1146,37 @@ bootstrapPassword: "supermario"
   EOT */
 
 }
+resource "hetznerdns_record" "int_snaptrail_subdomain" {
+  depends_on = [module.kube-hetzner]
+  zone_id    = data.hetznerdns_zone.main.id
+  name       = "*.snaptrail"
+  type       = "A"
+  value      = module.kube-hetzner.ingress_public_ipv4
+  ttl        = 300
+}
+
+resource "hetznerdns_record" "snaptrail_subdomain" {
+  depends_on = [module.kube-hetzner]
+  zone_id    = data.hetznerdns_zone.main.id
+  name       = "snaptrail"
+  type       = "A"
+  value      = module.kube-hetzner.ingress_public_ipv4
+  ttl        = 300
+}
+
+resource "hetznerdns_record" "int_k8s_subdomain" {
+  depends_on = [module.kube-hetzner]
+  zone_id    = data.hetznerdns_zone.main.id
+  name       = "*.k8s"
+  type       = "A"
+  value      = module.kube-hetzner.ingress_public_ipv4
+  ttl        = 300
+}
 
 resource "hetznerdns_record" "k8s_subdomain" {
   depends_on = [module.kube-hetzner]
   zone_id    = data.hetznerdns_zone.main.id
-  name       = "*.k8s"
+  name       = "k8s"
   type       = "A"
   value      = module.kube-hetzner.ingress_public_ipv4
   ttl        = 300
