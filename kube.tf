@@ -920,7 +920,12 @@ module "kube-hetzner" {
   # rancher_registration_manifest_url = "https://rancher.xyz.dev/v3/import/xxxxxxxxxxxxxxxxxxYYYYYYYYYYYYYYYYYYYzzzzzzzzzzzzzzzzzzzzz.yaml"
 
   # Extra commands to be executed after the `kubectl apply -k` (useful for post-install actions, e.g. wait for CRD, apply additional manifests, etc.).
-  # extra_kustomize_deployment_commands=""
+  extra_kustomize_deployment_commands = <<-EOT
+  kubectl -n cert-manager rollout status deployment/cert-manager --timeout=120s
+  kubectl -n cert-manager rollout status deployment/cert-manager-webhook --timeout=120s
+  kubectl -n cert-manager rollout status deployment/cert-manager-cainjector --timeout=120s
+  kubectl get clusterissuer letsencrypt-prod || kubectl apply -f /var/user_kustomize/letsencrypt.yaml
+  EOT
 
   # Extra values that will be passed to the `extra-manifests/kustomization.yaml.tpl` if its present.
   # extra_kustomize_parameters={}
