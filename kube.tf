@@ -127,7 +127,7 @@ module "kube-hetzner" {
   control_plane_nodepools = [
     {
       name        = "control-plane-fsn1",
-      server_type = "cx22",
+      server_type = "cax21",
       location    = "fsn1",
       labels      = [],
       taints      = [],
@@ -175,7 +175,7 @@ module "kube-hetzner" {
   agent_nodepools = [
     {
       name        = "agent-small-int",
-      server_type = "cx22",
+      server_type = "cax11",
       location    = "fsn1",
       labels      = ["node.kubernetes.io/role=worker"],
       taints      = [],
@@ -749,24 +749,32 @@ module "kube-hetzner" {
 
   # Adding extra firewall rules, like opening a port
   # More info on the format here https://registry.terraform.io/providers/hetznercloud/hcloud/latest/docs/resources/firewall
-  # extra_firewall_rules = [
-  #   {
-  #     description = "For Postgres"
-  #     direction       = "in"
-  #     protocol        = "tcp"
-  #     port            = "5432"
-  #     source_ips      = ["0.0.0.0/0", "::/0"]
-  #     destination_ips = [] # Won't be used for this rule
-  #   },
-  #   {
-  #     description = "To Allow ArgoCD access to resources via SSH"
-  #     direction       = "out"
-  #     protocol        = "tcp"
-  #     port            = "22"
-  #     source_ips      = [] # Won't be used for this rule
-  #     destination_ips = ["0.0.0.0/0", "::/0"]
-  #   }
-  # ]
+  extra_firewall_rules = [
+    {
+      description     = "For Postgres"
+      direction       = "in"
+      protocol        = "tcp"
+      port            = "5432"
+      source_ips      = ["0.0.0.0/0", "::/0"]
+      destination_ips = [] # Won't be used for this rule
+    },
+    {
+      description     = "For Postgres"
+      direction       = "out"
+      protocol        = "tcp"
+      port            = "5432"
+      source_ips      = [] # Won't be used for this rule
+      destination_ips = ["0.0.0.0/0", "::/0"]
+    },
+    #   {
+    #     description = "To Allow ArgoCD access to resources via SSH"
+    #     direction       = "out"
+    #     protocol        = "tcp"
+    #     port            = "22"
+    #     source_ips      = [] # Won't be used for this rule
+    #     destination_ips = ["0.0.0.0/0", "::/0"]
+    #   }
+  ]
 
   # If you want to configure a different CNI for k3s, use this flag
   # possible values: flannel (Default), calico, and cilium
@@ -912,7 +920,12 @@ module "kube-hetzner" {
   # rancher_registration_manifest_url = "https://rancher.xyz.dev/v3/import/xxxxxxxxxxxxxxxxxxYYYYYYYYYYYYYYYYYYYzzzzzzzzzzzzzzzzzzzzz.yaml"
 
   # Extra commands to be executed after the `kubectl apply -k` (useful for post-install actions, e.g. wait for CRD, apply additional manifests, etc.).
-  # extra_kustomize_deployment_commands=""
+  extra_kustomize_deployment_commands = <<-EOT
+  kubectl -n cert-manager rollout status deployment/cert-manager --timeout=120s
+  kubectl -n cert-manager rollout status deployment/cert-manager-webhook --timeout=120s
+  kubectl -n cert-manager rollout status deployment/cert-manager-cainjector --timeout=120s
+  kubectl get clusterissuer letsencrypt-prod || kubectl apply -f /var/user_kustomize/letsencrypt.yaml
+  EOT
 
   # Extra values that will be passed to the `extra-manifests/kustomization.yaml.tpl` if its present.
   # extra_kustomize_parameters={}
@@ -1138,11 +1151,37 @@ bootstrapPassword: "supermario"
   EOT */
 
 }
+resource "hetznerdns_record" "int_snaptrail_subdomain" {
+  depends_on = [module.kube-hetzner]
+  zone_id    = data.hetznerdns_zone.main.id
+  name       = "*.snaptrail"
+  type       = "A"
+  value      = module.kube-hetzner.ingress_public_ipv4
+  ttl        = 300
+}
+
+resource "hetznerdns_record" "snaptrail_subdomain" {
+  depends_on = [module.kube-hetzner]
+  zone_id    = data.hetznerdns_zone.main.id
+  name       = "snaptrail"
+  type       = "A"
+  value      = module.kube-hetzner.ingress_public_ipv4
+  ttl        = 300
+}
+
+resource "hetznerdns_record" "int_k8s_subdomain" {
+  depends_on = [module.kube-hetzner]
+  zone_id    = data.hetznerdns_zone.main.id
+  name       = "*.k8s"
+  type       = "A"
+  value      = module.kube-hetzner.ingress_public_ipv4
+  ttl        = 300
+}
 
 resource "hetznerdns_record" "k8s_subdomain" {
   depends_on = [module.kube-hetzner]
   zone_id    = data.hetznerdns_zone.main.id
-  name       = "*.k8s"
+  name       = "k8s"
   type       = "A"
   value      = module.kube-hetzner.ingress_public_ipv4
   ttl        = 300
