@@ -188,7 +188,9 @@ module "kube-hetzner" {
       # placement_group = "default"
 
       # Enable automatic backups via Hetzner (default: false)
-      backups = true
+      # backups = true
+      # m,
+      longhorn_volume_size = 50
     },
     # {
     #   name        = "agent-small-prod",
@@ -457,7 +459,7 @@ module "kube-hetzner" {
   # To use local storage on the nodes, you can enable Longhorn, default is "false".
   # See a full recap on how to configure agent nodepools for longhorn here https://github.com/kube-hetzner/terraform-hcloud-kube-hetzner/discussions/373#discussioncomment-3983159
   # Also see Longhorn best practices here https://gist.github.com/ifeulner/d311b2868f6c00e649f33a72166c2e5b
-  # enable_longhorn = true
+  enable_longhorn = true
 
   # By default, longhorn is pulled from https://charts.longhorn.io.
   # If you need a version of longhorn which assures compatibility with rancher you can set this variable to https://charts.rancher.io.
@@ -470,7 +472,7 @@ module "kube-hetzner" {
   # longhorn_fstype = "xfs"
 
   # how many replica volumes should longhorn create (default is 3).
-  # longhorn_replica_count = 1
+  longhorn_replica_count = 1
 
   # When you enable Longhorn, you can go with the default settings and just modify the above two variables OR you can add a longhorn_values variable
   # with all needed helm values, see towards the end of the file in the advanced section.
@@ -924,7 +926,8 @@ module "kube-hetzner" {
   kubectl -n cert-manager rollout status deployment/cert-manager --timeout=120s
   kubectl -n cert-manager rollout status deployment/cert-manager-webhook --timeout=120s
   kubectl -n cert-manager rollout status deployment/cert-manager-cainjector --timeout=120s
-  kubectl get clusterissuer letsencrypt-prod || kubectl apply -f /var/user_kustomize/letsencrypt.yaml
+  kubectl get clusterissuer letsencrypt-prod || kubectl apply -k /var/user_kustomize/letsencrypt/
+  kubectl apply -k /var/user_kustomize/minio/
   EOT
 
   # Extra values that will be passed to the `extra-manifests/kustomization.yaml.tpl` if its present.
@@ -1081,23 +1084,27 @@ ports:
   # Nginx, all Nginx helm values can be found at https://github.com/kubernetes/ingress-nginx/blob/main/charts/ingress-nginx/values.yaml
   # You can also have a look at https://kubernetes.github.io/ingress-nginx/, to understand how it works, and all the options at your disposal.
   # The following is an example, please note that the current indentation inside the EOT is important.
-  /*   nginx_values = <<EOT
-controller:
-  watchIngressWithoutClass: "true"
-  kind: "DaemonSet"
-  config:
-    "use-forwarded-headers": "true"
-    "compute-full-forwarded-for": "true"
-    "use-proxy-protocol": "true"
-  service:
-    annotations:
-      "load-balancer.hetzner.cloud/name": "k3s"
-      "load-balancer.hetzner.cloud/use-private-ip": "true"
-      "load-balancer.hetzner.cloud/disable-private-ingress": "true"
-      "load-balancer.hetzner.cloud/location": "nbg1"
-      "load-balancer.hetzner.cloud/type": "lb11"
-      "load-balancer.hetzner.cloud/uses-proxyprotocol": "true"
-  EOT */
+  #   nginx_values = <<EOT
+  # controller:
+  #   watchIngressWithoutClass: "true"
+  #   kind: "DaemonSet"
+  #   ingressClasRessource:
+  #     name: nginx
+  #     enabled: true
+  #     default: true
+  #   config:
+  #     "use-forwarded-headers": "true"
+  #     "compute-full-forwarded-for": "true"
+  #     "use-proxy-protocol": "true"
+  #   service:
+  #     annotations:
+  #       "load-balancer.hetzner.cloud/name": "k3s"
+  #       "load-balancer.hetzner.cloud/use-private-ip": "true"
+  #       "load-balancer.hetzner.cloud/disable-private-ingress": "true"
+  #       "load-balancer.hetzner.cloud/location": "nbg1"
+  #       "load-balancer.hetzner.cloud/type": "lb11"
+  #       "load-balancer.hetzner.cloud/uses-proxyprotocol": "true"
+  #   EOT 
 
   # If you want to use a specific HAProxy helm chart version, set it below; otherwise, leave them as-is for the latest versions.
   # haproxy_version = ""
@@ -1164,6 +1171,15 @@ resource "hetznerdns_record" "snaptrail_subdomain" {
   depends_on = [module.kube-hetzner]
   zone_id    = data.hetznerdns_zone.main.id
   name       = "snaptrail"
+  type       = "A"
+  value      = module.kube-hetzner.ingress_public_ipv4
+  ttl        = 300
+}
+
+resource "hetznerdns_record" "minio_subdomain" {
+  depends_on = [module.kube-hetzner]
+  zone_id    = data.hetznerdns_zone.main.id
+  name       = "minio"
   type       = "A"
   value      = module.kube-hetzner.ingress_public_ipv4
   ttl        = 300
